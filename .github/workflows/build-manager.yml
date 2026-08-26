@@ -1,4 +1,4 @@
-name: Build spoofed manager
+name: Build manager
 
 on:
   push:
@@ -14,8 +14,6 @@ on:
         type: boolean
         default: false
   schedule:
-    # Weekly fallback check: builds only happen when upstream main moved
-    # (the release-exists skip makes this a no-op otherwise).
     - cron: "17 4 * * 1"
 
 permissions:
@@ -63,20 +61,6 @@ jobs:
             echo "already built: $TAG"
           fi
 
-      - name: Generate per-run spoof identity
-        id: spoof
-        if: steps.skip.outputs.skip != 'true'
-        run: |
-          words=(sysdiag tune hub corelink guard pulse trace mesh relay probe)
-          w1="${words[$((RANDOM % ${#words[@]}))]}"
-          w2="${words[$((RANDOM % ${#words[@]}))]}"
-          n="$((RANDOM % 9000 + 1000))"
-          pkg="com.sec.android.${w1}.${w2}${n}"
-          label="$(tr '[:lower:]' '[:upper:]' <<< "${w1:0:1}")${w1:1} ${w2^}$n"
-          echo "pkg=$pkg" >> "$GITHUB_OUTPUT"
-          echo "label=$label" >> "$GITHUB_OUTPUT"
-          echo "spoofing as $pkg / $label"
-
       - name: Checkout upstream at resolved commit
         if: steps.skip.outputs.skip != 'true'
         uses: actions/checkout@v4
@@ -96,31 +80,25 @@ jobs:
             sdkmanager --install "ndk;$ndk" > /dev/null
           fi
 
-      - name: Inject pipeline optimization flags (O2 thin-LTO armv8a a715-tune)
+      - name: Inject pipeline optimization flags (O2 without LTO, armv8a a715-tune)
         if: steps.skip.outputs.skip != 'true'
         working-directory: ksu
         run: |
           f=manager/app/build.gradle.kts
           grep -q '"-Oz", "-DNDEBUG"' "$f"
-          grep -q '"-flto", "-ffunction-sections"' "$f"
           grep -q 'listOf("arm64-v8a", "x86_64")' "$f"
           sed -i 's/"-Oz", "-DNDEBUG"/"-O2", "-DNDEBUG", "-march=armv8-a+crc+crypto", "-mtune=cortex-a715"/' "$f"
-          sed -i 's/"-flto", "-ffunction-sections"/"-flto=thin", "-ffunction-sections"/' "$f"
+          sed -i 's/"-flto", //g' "$f"
           sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' "$f"
           grep -q 'mtune=cortex-a715' "$f"
-          echo "flags injected (arm64-only: a715 tune is ARM-only)"
+          echo "flags injected O2 no-LTO (fallback per user instruction)"
 
-      - name: Build release APK (spoofed id/label, stable keystore)
+      - name: Build release APK (normal manager, stable keystore)
         if: steps.skip.outputs.skip != 'true'
         working-directory: ksu/manager
-        env:
-          PKG: ${{ steps.spoof.outputs.pkg }}
-          LABEL: ${{ steps.spoof.outputs.label }}
         run: |
           chmod +x gradlew
           ./gradlew :app:assembleRelease --no-daemon \
-            -PKSU_PACKAGE_NAME="$PKG" \
-            -PKSU_NAME="$LABEL" \
             -PKEYSTORE_FILE="$GITHUB_WORKSPACE/release.keystore" \
             -PKEYSTORE_PASSWORD=rmg-release-key \
             -PKEY_ALIAS=rmg-release \
@@ -129,9 +107,6 @@ jobs:
       - name: Extract version info + hashes
         if: steps.skip.outputs.skip != 'true'
         id: meta
-        env:
-          PKG: ${{ steps.spoof.outputs.pkg }}
-          LABEL: ${{ steps.spoof.outputs.label }}
         run: |
           apk="$(find ksu/manager/app/build/outputs/apk/release -name '*.apk' | head -1)"
           test -n "$apk"
@@ -139,14 +114,16 @@ jobs:
           badging="$("$aapt2" dump badging "$apk")"
           vc="$(echo "$badging" | grep -oP "versionCode='\K[0-9]+")"
           vn="$(echo "$badging" | grep -oP "versionName='\K[^']+")"
+          pkg="$(echo "$badging" | grep -oP "package: name='\K[^']+")"
+          label="$(echo "$badging" | grep -oP "application-label:'\K[^']+" | head -1)"
           sha256="$(sha256sum "$apk" | cut -d' ' -f1)"
-          safe_label="${LABEL// /_}"
+          safe_label="${label// /_}"
           asset="${safe_label}-${vn}-${{ steps.up.outputs.short }}.apk"
           cp "$apk" "$asset"
           cat > manager-feed.json <<EOF
           {
-            "pkg": "$PKG",
-            "label": "$LABEL",
+            "pkg": "$pkg",
+            "label": "$label",
             "versionCode": $vc,
             "versionName": "$vn",
             "upstreamSha": "${{ steps.up.outputs.sha }}",
@@ -159,6 +136,7 @@ jobs:
           echo "asset=$asset" >> "$GITHUB_OUTPUT"
           echo "vc=$vc" >> "$GITHUB_OUTPUT"
           echo "vn=$vn" >> "$GITHUB_OUTPUT"
+          echo "pkg=$pkg" >> "$GITHUB_OUTPUT"
           cat manager-feed.json
 
       - name: Publish release for this upstream commit
@@ -175,8 +153,8 @@ jobs:
             --notes "Upstream: ${{ env.UPSTREAM_REPO }}@${{ steps.up.outputs.sha }}
           ${{ steps.up.outputs.subject }}
 
-          Spoof: ${{ steps.spoof.outputs.pkg }} / ${{ steps.spoof.outputs.label }} — stable pipeline keystore.
-          Flags: -O2 thin-LTO armv8-a+crc+crypto mtune=cortex-a715" \
+          Normal manager (no spoof) — stable pipeline keystore.
+          Flags: -O2 armv8-a+crc+crypto mtune=cortex-a715 (no LTO fallback)" \
             "${{ steps.meta.outputs.asset }}" manager-feed.json
 
       - name: Commit feed to main
