@@ -1,11 +1,11 @@
 {
-  "pkg": "com.sec.android.relay.tune9013",
-  "label": "Relay Tune9013",
-  "versionCode": 32595,
-  "versionName": "v3.2.5-70-g45217843",
-  "upstreamSha": "4521784328352c54334beb29e05c74360b60d7cb",
-  "upstreamSubject": "refactor(kernel): Perform umount for webview zygote (#3630)",
-  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/Relay_Tune9013-v3.2.5-70-g45217843-45217843.apk",
-  "sha256": "cf919ba3de27c31a1ade2a09b00cd2f24e6b97aa3bf70c4db3102e3d31565b52",
-  "builtAt": "2026-08-26T05:06:39Z"
+  "pkg": "me.weishu.kernelsu",
+  "label": "KernelSU",
+  "versionCode": 32596,
+  "versionName": "v3.2.5-71-gbefbcd38",
+  "upstreamSha": "befbcd388bb6c10befd3645311ad08e556d362ac",
+  "upstreamSubject": "ksud: Fix su identity argument handling (#3659)",
+  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-befbcd38/KernelSU-v3.2.5-71-gbefbcd38-befbcd38.apk",
+  "sha256": "0c0d89b738708ccef9ed3e05beafafdb671bb2c390768c87ae6eae4e1ef0935c",
+  "builtAt": "2026-08-26T15:06:43Z"
 }
