@@ -1,11 +1,11 @@
 {
-  "pkg": "com.sec.android.hub.probe5693",
-  "label": "Hub Probe5693",
+  "pkg": "com.sec.android.trace.hub1682",
+  "label": "Trace Hub1682",
   "versionCode": 32595,
   "versionName": "v3.2.5-70-g45217843",
   "upstreamSha": "4521784328352c54334beb29e05c74360b60d7cb",
   "upstreamSubject": "refactor(kernel): Perform umount for webview zygote (#3630)",
-  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/Hub_Probe5693-v3.2.5-70-g45217843-45217843.apk",
-  "sha256": "6c9ba1a89815a6f47a140fd9e4074ea597b7b292fdd930b39e06a1d378faead1",
-  "builtAt": "2026-08-26T03:16:09Z"
+  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/Trace_Hub1682-v3.2.5-70-g45217843-45217843.apk",
+  "sha256": "d00032bbbcb162fb088b35c30fa0d72e67473ea1dbc83207754319e1e04e5f44",
+  "builtAt": "2026-08-26T04:21:32Z"
 }
