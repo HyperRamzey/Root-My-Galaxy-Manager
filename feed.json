@@ -1,0 +1,11 @@
+{
+  "pkg": "com.sec.android.systune",
+  "label": "SystemTune",
+  "versionCode": 32595,
+  "versionName": "v3.2.5-70-g45217843",
+  "upstreamSha": "4521784328352c54334beb29e05c74360b60d7cb",
+  "upstreamSubject": "refactor(kernel): Perform umount for webview zygote (#3630)",
+  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/SystemTune-v3.2.5-70-g45217843-45217843.apk",
+  "sha256": "fd967dd360f5d610e898dde62c718307c7b2244718c852a7961891d57994ae77",
+  "builtAt": "2026-08-26T00:41:56Z"
+}
