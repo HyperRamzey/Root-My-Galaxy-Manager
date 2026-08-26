@@ -85,10 +85,12 @@ jobs:
           f=manager/app/build.gradle.kts
           grep -q '"-Oz", "-DNDEBUG"' "$f"
           grep -q '"-flto", "-ffunction-sections"' "$f"
+          grep -q 'listOf("arm64-v8a", "x86_64")' "$f"
           sed -i 's/"-Oz", "-DNDEBUG"/"-O2", "-DNDEBUG", "-march=armv8-a+crc+crypto", "-mtune=cortex-a715"/' "$f"
           sed -i 's/"-flto", "-ffunction-sections"/"-flto=thin", "-ffunction-sections"/' "$f"
+          sed -i 's/listOf("arm64-v8a", "x86_64")/listOf("arm64-v8a")/' "$f"
           grep -q 'mtune=cortex-a715' "$f"
-          echo "flags injected"
+          echo "flags injected (arm64-only: a715 tune is ARM-only)"
 
       - name: Build release APK (spoofed id/label, stable keystore)
         if: steps.skip.outputs.skip != 'true'
