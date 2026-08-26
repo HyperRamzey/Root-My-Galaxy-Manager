@@ -1,0 +1,162 @@
+name: Build spoofed manager
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if this upstream commit already has a release
+        type: boolean
+        default: false
+  schedule:
+    - cron: "37 */6 * * *"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-manager
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: tiann/KernelSU
+  PKG: com.sec.android.systune
+  LABEL: SystemTune
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Resolve upstream latest commit
+        id: up
+        run: |
+          sha="$(curl -sf "https://api.github.com/repos/${UPSTREAM_REPO}/commits/main" | jq -r .sha)"
+          test -n "$sha" && test "$sha" != "null"
+          short="${sha::8}"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "short=$short" >> "$GITHUB_OUTPUT"
+          echo "tag=mgr-$short" >> "$GITHUB_OUTPUT"
+          subject="$(curl -sf "https://api.github.com/repos/${UPSTREAM_REPO}/commits/$sha" | jq -r .commit.message | head -1)"
+          echo "subject=$subject" >> "$GITHUB_OUTPUT"
+
+      - name: Skip when this upstream commit is already released
+        id: skip
+        if: ${{ inputs.force != true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.up.outputs.tag }}
+        run: |
+          if gh release view "$TAG" --json assets -q '.assets[].name' 2>/dev/null | grep -q '\.apk$'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "already built: $TAG"
+          fi
+
+      - name: Checkout upstream at resolved commit
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.UPSTREAM_REPO }}
+          ref: ${{ steps.up.outputs.sha }}
+          path: ksu
+          fetch-depth: 0
+
+      - name: Ensure NDK
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          ndk="$(grep -oP '^ndk = "\K[^"]+' ksu/manager/gradle/libs.versions.toml)"
+          echo "required NDK: $ndk"
+          if [ ! -d "$ANDROID_HOME/ndk/$ndk" ]; then
+            yes | sdkmanager --licenses > /dev/null || true
+            sdkmanager --install "ndk;$ndk" > /dev/null
+          fi
+
+      - name: Inject pipeline optimization flags (O2 thin-LTO armv8a a715-tune)
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: ksu
+        run: |
+          f=manager/app/build.gradle.kts
+          grep -q '"-Oz", "-DNDEBUG"' "$f"
+          grep -q '"-flto", "-ffunction-sections"' "$f"
+          sed -i 's/"-Oz", "-DNDEBUG"/"-O2", "-DNDEBUG", "-march=armv8-a+crc+crypto", "-mtune=cortex-a715"/' "$f"
+          sed -i 's/"-flto", "-ffunction-sections"/"-flto=thin", "-ffunction-sections"/' "$f"
+          grep -q 'mtune=cortex-a715' "$f"
+          echo "flags injected"
+
+      - name: Build release APK (spoofed id/label, stable keystore)
+        if: steps.skip.outputs.skip != 'true'
+        working-directory: ksu/manager
+        run: |
+          chmod +x gradlew
+          ./gradlew :app:assembleRelease --no-daemon \
+            -PKSU_PACKAGE_NAME="$PKG" \
+            -PKSU_NAME="$LABEL" \
+            -PKEYSTORE_FILE="$GITHUB_WORKSPACE/release.keystore" \
+            -PKEYSTORE_PASSWORD=rmg-release-key \
+            -PKEY_ALIAS=rmg-release \
+            -PKEY_PASSWORD=rmg-release-key
+
+      - name: Extract version info + hashes
+        if: steps.skip.outputs.skip != 'true'
+        id: meta
+        run: |
+          apk="$(find ksu/manager/app/build/outputs/apk/release -name '*.apk' | head -1)"
+          test -n "$apk"
+          aapt2="$(find "$ANDROID_HOME/build-tools" -name aapt2 | sort | tail -1)"
+          badging="$("$aapt2" dump badging "$apk")"
+          vc="$(echo "$badging" | grep -oP "versionCode='\K[0-9]+")"
+          vn="$(echo "$badging" | grep -oP "versionName='\K[^']+")"
+          sha256="$(sha256sum "$apk" | cut -d' ' -f1)"
+          asset="SystemTune-${vn}-${{ steps.up.outputs.short }}.apk"
+          cp "$apk" "$asset"
+          cat > manager-feed.json <<EOF
+          {
+            "pkg": "$PKG",
+            "label": "$LABEL",
+            "versionCode": $vc,
+            "versionName": "$vn",
+            "upstreamSha": "${{ steps.up.outputs.sha }}",
+            "upstreamSubject": "${{ steps.up.outputs.subject }}",
+            "url": "https://github.com/${{ github.repository }}/releases/download/${{ steps.up.outputs.tag }}/$asset",
+            "sha256": "$sha256",
+            "builtAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+          echo "asset=$asset" >> "$GITHUB_OUTPUT"
+          echo "vc=$vc" >> "$GITHUB_OUTPUT"
+          echo "vn=$vn" >> "$GITHUB_OUTPUT"
+          cat manager-feed.json
+
+      - name: Publish release for this upstream commit
+        if: steps.skip.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.up.outputs.tag }}
+        run: |
+          gh release create "$TAG" \
+            --title "SystemTune ${{ steps.meta.outputs.vn }} (${{ steps.meta.outputs.vc }}) @ ${{ steps.up.outputs.short }}" \
+            --notes "Upstream: ${{ env.UPSTREAM_REPO }}@${{ steps.up.outputs.sha }}
+          ${{ steps.up.outputs.subject }}
+
+          Spoof: $PKG / $LABEL — stable pipeline keystore.
+          Flags: -O2 thin-LTO armv8-a+crc+crypto mtune=cortex-a715" \
+            "${{ steps.meta.outputs.asset }}" manager-feed.json
+
+      - name: Commit feed to main
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          cp manager-feed.json feed.json
+          git config user.name "rmg-ci"
+          git config user.email "rmg-ci@users.noreply.github.com"
+          git add feed.json
+          if git diff --cached --quiet; then echo "feed unchanged"; else
+            git commit -m "feed: SystemTune ${{ steps.meta.outputs.vn }} (${{ steps.meta.outputs.vc }}) @ ${{ steps.up.outputs.short }}"
+            git push
+          fi
