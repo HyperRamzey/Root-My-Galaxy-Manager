@@ -1,11 +1,11 @@
 {
-  "pkg": "com.sec.android.trace.hub1682",
-  "label": "Trace Hub1682",
+  "pkg": "com.sec.android.relay.tune9013",
+  "label": "Relay Tune9013",
   "versionCode": 32595,
   "versionName": "v3.2.5-70-g45217843",
   "upstreamSha": "4521784328352c54334beb29e05c74360b60d7cb",
   "upstreamSubject": "refactor(kernel): Perform umount for webview zygote (#3630)",
-  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/Trace_Hub1682-v3.2.5-70-g45217843-45217843.apk",
-  "sha256": "d00032bbbcb162fb088b35c30fa0d72e67473ea1dbc83207754319e1e04e5f44",
-  "builtAt": "2026-08-26T04:21:32Z"
+  "url": "https://github.com/HyperRamzey/Root-My-Galaxy-Manager/releases/download/mgr-45217843/Relay_Tune9013-v3.2.5-70-g45217843-45217843.apk",
+  "sha256": "cf919ba3de27c31a1ade2a09b00cd2f24e6b97aa3bf70c4db3102e3d31565b52",
+  "builtAt": "2026-08-26T05:06:39Z"
 }
